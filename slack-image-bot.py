@@ -11,9 +11,23 @@ import urllib.request
 
 tok = 'xoxp-7361418342-7569957862-7569672320-32d137'
 payload = {'token': tok}
-debug_enabled = True
+debug_enabled = False
 
 soundcloud_ids = json.loads(open('ids.json').read())
+
+def translate(str):
+    ret = str.replace(':', '%3A').replace('/', '%2F')
+    return ret
+
+def dict_to_url_param(d):
+    ret = '%5B%7B'
+    for key in d.keys():
+        ret = ret + '\"' + translate(key) + '\"' #item
+        ret = ret + '%3A%20' #colon
+        ret = ret + '\"' + translate(d[key]) + '\"' #value
+        ret = ret + '%2C%20' #comma
+    ret = ret.rstrip('%2C%20') + '%7D%5D'
+    return ret
 
 def on_message(ws, message):
     global tok
@@ -65,13 +79,15 @@ def on_message(ws, message):
                     print(search_results.json())
                 # If the query is ok, send the first result
                 if search_results.json().get('ok') and len(search_results.json().get('files').get('matches')) > 0:
-                    result_url = search_results.json().get('files').get('matches')[0].get('url')
-                    # If a sound file
-                    if search_results.json().get('files').get('matches')[0].get('mimetype').count("audio") > 0:
+                    file = search_results.json().get('files').get('matches')[0]
+                    result_url = file.get('url')
+                    add_attachments = False
+                    # If a audio file
+                    if file.get('mimetype').count("audio") > 0:
                         soundcloud_id = ""
                         # Check to see if this file has already been uploaded
                         for key in soundcloud_ids.keys():
-                            if key == search_results.json().get('files').get('matches')[0].get('name'):
+                            if key == file.get('name'):
                                 soundcloud_id = soundcloud_ids[key]
                         # Not found
                         if soundcloud_id == "":
@@ -79,14 +95,14 @@ def on_message(ws, message):
                             payload = {
                                 'token': tok,
                                 'channel': action.get('channel'),
-                                'text': "Uploading " + search_results.json().get('files').get('matches')[0].get('name') + " to SoundCloud. Please wait.",
+                                'text': "Uploading " + file.get('name') + " to SoundCloud. Please wait.",
                                 'as_user': True
                             }
                             print(requests.get('https://slack.com/api/chat.postMessage', params=payload).json())
                             # Upload the file
-                            upload = urllib.request.urlopen(search_results.json().get('files').get('matches')[0].get('url_download'))
+                            upload = urllib.request.urlopen(file.get('url_download'))
                             track = sc.post('/tracks', track={
-                                'title': search_results.json().get('files').get('matches')[0].get('name'),
+                                'title': file.get('name'),
                                 'asset_data': upload
                             })
                             text = track.permalink_url.replace("http", "https")
@@ -96,23 +112,60 @@ def on_message(ws, message):
                                 print("waiting for soundcloud...")
                                 time.sleep(1)
                             # After the upload is complete, add the song's id to the database
-                            soundcloud_ids[search_results.json().get('files').get('matches')[0].get('name')] = track.id
+                            soundcloud_ids[file.get('name')] = track.id
                         # Found
                         else:
                             text = sc.get('/tracks/' + str(soundcloud_id)).permalink_url.replace("http", "https")
-
+                        # Prep audio payload
+                        payload = {
+                            'token': tok,
+                            'channel': action.get('channel'),
+                            'text': text,
+                            'unfurl-media': True,
+                            'as_user': True
+                        }
+                    # If image file
+                    elif file.get('mimetype').count("image") > 0:
+                        add_attachments = True
+                        # Prep image payload
+                        payload = {
+                            'token': tok,
+                            'channel': action.get('channel'),
+                            'username': name,
+                            'icon_emoji': ":shurelia:",
+                            'text': ""
+                        }
+                        if debug_enabled:
+                            print(payload)
                     # Nonspecific type
                     else:
                         text = result_url
+                        # Prep unspecified payload
+                        payload = {
+                            'token': tok,
+                            'channel': action.get('channel'),
+                            'text': text,
+                            'unfurl-media': True,
+                            'as_user': True
+                        }
                     # Send the message
-                    payload = {
-                        'token': tok,
-                        'channel': action.get('channel'),
-                        'text': text,
-                        'unfurl-media': True,
-                        'as_user': True
-                    }
-                    print(requests.get('https://slack.com/api/chat.postMessage', params=payload).json())
+                    url = 'https://slack.com/api/chat.postMessage?'
+                    for key in payload.keys():
+                        url = url + translate(key) + "=" + translate(payload[key]) + "&"
+                    if add_attachments:
+                        attachment = {
+                            'fallback': file.get('name'),
+                            'text': file.get('name'),
+                            'image_url': file.get('url')
+                        }
+                        url = url + 'attachments=' + dict_to_url_param(attachment) + "&pretty=1"
+                    else:
+                        url = url.rstrip('&')
+                    if debug_enabled:
+                        print(url)
+                        print(requests.get(url))
+                    else:
+                        requests.get(url)
 
 def on_error(ws, error):
     print(error)
