@@ -12,6 +12,49 @@ import urllib.request
 tok = 'xoxp-7361418342-7569957862-7569672320-32d137'
 payload = {'token': tok}
 debug_enabled = False
+four_oh_four = {
+    "id": "F07L6C0FJ",
+    "created": 1436928606,
+    "timestamp": 1436928606,
+    "name": "not-found.jpg",
+    "title": "not-found.jpg",
+    "mimetype": "image\/jpeg",
+    "filetype": "jpg",
+    "pretty_type": "JPEG",
+    "user": "U07AN38CT",
+    "editable": False,
+    "size": 54246,
+    "mode": "hosted",
+    "is_external": False,
+    "external_type": "",
+    "is_public": True,
+    "public_url_shared": False,
+    "display_as_bot": False,
+    "username": "",
+    "url": "https:\/\/slack-files.com\/files-pub\/T07AMCAA2-F07L6C0FJ-d333dc2ee0\/not-found.jpg",
+    "url_download": "https:\/\/slack-files.com\/files-pub\/T07AMCAA2-F07L6C0FJ-d333dc2ee0\/download\/not-found.jpg",
+    "url_private": "https:\/\/files.slack.com\/files-pri\/T07AMCAA2-F07L6C0FJ\/not-found.jpg",
+    "url_private_download": "https:\/\/files.slack.com\/files-pri\/T07AMCAA2-F07L6C0FJ\/download\/not-found.jpg",
+    "thumb_64": "https:\/\/slack-files.com\/files-tmb\/T07AMCAA2-F07L6C0FJ-b4935ef172\/not-found_64.jpg",
+    "thumb_80": "https:\/\/slack-files.com\/files-tmb\/T07AMCAA2-F07L6C0FJ-b4935ef172\/not-found_80.jpg",
+    "thumb_360": "https:\/\/slack-files.com\/files-tmb\/T07AMCAA2-F07L6C0FJ-b4935ef172\/not-found_360.jpg",
+    "thumb_360_w": 360,
+    "thumb_360_h": 237,
+    "thumb_480": "https:\/\/slack-files.com\/files-tmb\/T07AMCAA2-F07L6C0FJ-b4935ef172\/not-found_480.jpg",
+    "thumb_480_w": 480,
+    "thumb_480_h": 315,
+    "thumb_160": "https:\/\/slack-files.com\/files-tmb\/T07AMCAA2-F07L6C0FJ-b4935ef172\/not-found_160.jpg",
+    "image_exif_rotation": 1,
+    "permalink": "https:\/\/yog-sothoth.slack.com\/files\/uncanny_smile\/F07L6C0FJ\/not-found.jpg",
+    "permalink_public": "https:\/\/slack-files.com\/T07AMCAA2-F07L6C0FJ-d333dc2ee0",
+    "channels": [
+        "C07AMAWBT"
+    ],
+    "groups": [],
+    "ims": [],
+    "comments_count": 0,
+    "preview": None
+}
 
 soundcloud_ids = json.loads(open('ids.json').read())
 
@@ -29,6 +72,37 @@ def dict_to_url_param(d):
     ret = ret.rstrip('%2C%20') + '%7D%5D'
     return ret
 
+def getFile(query):
+    # Turn the query into a list of substrings to be found
+    targets = query.split('+')
+    # Grab the list of all files
+    payload = {
+        'token': tok,
+        'count': 999
+    }
+    response = requests.get('https://slack.com/api/files.list', params=payload)
+    if debug_enabled:
+        print(response.json())
+        print(str(response.json().get('paging').get('count')) + " of " + str(response.json().get('paging').get('total')) + " returned")
+    files = response.json().get('files')
+    # Award points
+    high_p = 0
+    for file in files:
+        p = 0
+        for target in targets:
+            # Case for awarding a point
+            if target in file.get('name'):
+                p = p + 1
+        # New best match
+        print(file.get("name") + " gets " + str(p))
+        if p >= high_p:
+            high_p = p
+            ret = file
+        # No matches
+        if high_p == 0:
+            ret = four_oh_four
+    return ret
+
 def on_message(ws, message):
     global tok
     global sc
@@ -42,7 +116,7 @@ def on_message(ws, message):
         if action.get('subtype') == "message_changed":
             text = action.get('message').get('text')
             payload = {'token': tok, "user": action.get('message').get('user')}
-        # No spectial subtype treatment
+        # No special subtype treatment
         else:
             text = action.get('text')
             payload = {'token': tok, "user": action.get('user')}
@@ -55,7 +129,7 @@ def on_message(ws, message):
         else:
             print(str(name) + ": " + text)
         # File code found
-        if text.count("!") > 0:
+        if ("!" in text) and ((text.find("!") == 0 or text[text.find("!")-1] == ' ')):
             # Find out what to search for
             target_substring = False
             search_text = ""
@@ -68,22 +142,13 @@ def on_message(ws, message):
                     search_text = search_text + char
             # Only proceed if there is a query
             if search_text != "":
-                # Find the right image's url
-                payload = {
-                    'token': tok,
-                    'query': search_text,
-                    'count': 1
-                    }
-                search_results = requests.get('https://slack.com/api/search.files', params=payload)
-                if debug_enabled:
-                    print(search_results.json())
                 # If the query is ok, send the first result
-                if search_results.json().get('ok') and len(search_results.json().get('files').get('matches')) > 0:
-                    file = search_results.json().get('files').get('matches')[0]
+                if True:
+                    file = getFile(search_text)
                     result_url = file.get('url')
                     add_attachments = False
                     # If a audio file
-                    if file.get('mimetype').count("audio") > 0:
+                    if "audio" in file.get('mimetype'):
                         soundcloud_id = ""
                         # Check to see if this file has already been uploaded
                         for key in soundcloud_ids.keys():
@@ -125,7 +190,7 @@ def on_message(ws, message):
                             'as_user': True
                         }
                     # If image file
-                    elif file.get('mimetype').count("image") > 0:
+                    elif "image" in file.get('mimetype'):
                         add_attachments = True
                         # Prep image payload
                         payload = {
@@ -151,7 +216,7 @@ def on_message(ws, message):
                     # Send the message
                     url = 'https://slack.com/api/chat.postMessage?'
                     for key in payload.keys():
-                        url = url + translate(key) + "=" + translate(payload[key]) + "&"
+                        url = url + translate(key) + "=" + translate(str(payload[key])) + "&"
                     if add_attachments:
                         attachment = {
                             'fallback': file.get('name'),
@@ -176,9 +241,11 @@ def on_close(ws):
 
 def on_open(ws):
     def run(*args):
-        for i in range(3):
+        i = 0
+        while(True):
             time.sleep(1)
             ws.send("Hello %d" % i)
+            i = i + 1
         time.sleep(1)
         ws.close()
 
