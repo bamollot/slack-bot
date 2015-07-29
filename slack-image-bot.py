@@ -163,9 +163,10 @@ def on_message(ws, message):
                                 'text': "Uploading " + file.get('name') + " to SoundCloud. Please wait.",
                                 'as_user': True
                             }
-                            print(requests.get('https://slack.com/api/chat.postMessage', params=payload).json())
+                            if debug_enabled:
+                                print(requests.get('https://slack.com/api/chat.postMessage', params=payload).json())
                             # Upload the file
-                            upload = urllib.request.urlopen(file.get('url_download'))
+                            upload = urllib.request.urlopen(file.get('url'))
                             track = sc.post('/tracks', track={
                                 'title': file.get('name'),
                                 'asset_data': upload
