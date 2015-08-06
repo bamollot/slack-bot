@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import random
 import subprocess
 import json
 import requests
@@ -9,6 +10,7 @@ import time
 import string
 import urllib.request
 
+allowed_arithmetic_chars = '()*/%+-,1234567890DR '
 tok = 'xoxp-7361418342-7569957862-7569672320-32d137'
 payload = {'token': tok}
 debug_enabled = False
@@ -94,7 +96,8 @@ def getFile(query):
             if target in file.get('name'):
                 p = p + 1
         # New best match
-        print(file.get("name") + " gets " + str(p))
+        if debug_enabled:
+            print(file.get("name") + " gets " + str(p))
         if p >= high_p:
             high_p = p
             ret = file
@@ -128,6 +131,77 @@ def on_message(ws, message):
         # Normal message
         else:
             print(str(name) + ": " + text)
+        # Arithmetic code found
+        if (text.count('|') > 1):
+            expr_valid = True
+            index = text.find('|')
+            expr = text[index+1:text[index+1:].find('|')+1]
+            if debug_enabled:
+                print(expr)
+            for char in expr:
+                if char in allowed_arithmetic_chars:
+                    pass
+                else:
+                    expr_valid = False
+            # Passed test for validity of expression
+            if expr_valid:
+                # Get rid of spaces
+                expr = expr.replace(' ', '')
+                # Handle random numbers
+                while 'D' in expr or 'R' in expr:
+                    if 'R' in expr:
+                        done = False
+                        low_done = False
+                        low_rs = ''
+                        high_rs = ''
+                        start_index = expr.find('R')
+                        index = start_index + 1
+                        while index < len(expr) and not done:
+                            # another expression begins
+                            if expr[index] in '()*/%+-DR':
+                                done = True
+                                index = index - 1
+                            elif expr[index] == ',':
+                                low_done = True
+                            elif not low_done:
+                                low_rs = low_rs + expr[index]
+                            else:
+                                high_rs = high_rs + expr[index]
+                            index = index + 1
+                        num = str(random.randrange(int(low_rs), int(high_rs)+1))
+                        expr = expr.replace(expr[start_index:index], num, 1)
+                        if debug_enabled:
+                            print("New expr: " + expr)
+                    if 'D' in expr:
+                        done = False
+                        rs = ''
+                        start_index = expr.find('D')
+                        index = start_index + 1
+                        while index < len(expr) and not done:
+                            # another expression begins
+                            if expr[index] in '()*/%+-DR':
+                                done = True
+                                index = index - 1
+                            else:
+                                rs = rs + expr[index]
+                            index = index + 1
+                        num = str(random.randrange(1, int(rs)+1))
+                        expr = expr.replace(expr[start_index:index], num, 1)
+                        if debug_enabled:
+                            print("New expr: " + expr)
+                # Finish random codes #
+                if debug_enabled:
+                    print(expr)
+                to_say = subprocess.check_output("echo $(("+expr+"))", shell=True)
+                # Send response
+                payload = {
+                    'token': tok,
+                    'channel': action.get('channel'),
+                    'username': "Mathbot",
+                    'icon_emoji': ":shurelia:",
+                    'text': to_say
+                }
+                requests.get('https://slack.com/api/chat.postMessage', params=payload)
         # File code found
         if ("!" in text) and ((text.find("!") == 0 or text[text.find("!")-1] == ' ')):
             # Find out what to search for
