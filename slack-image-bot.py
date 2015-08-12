@@ -60,6 +60,11 @@ four_oh_four = {
 
 soundcloud_ids = json.loads(open('ids.json').read())
 
+def lesser(i1, i2):
+    if i1 < i2:
+        return i1
+    return i2
+
 def translate(str):
     ret = str.replace(':', '%3A').replace('/', '%2F')
     return ret
@@ -135,7 +140,7 @@ def on_message(ws, message):
         if (text.count('|') > 1):
             expr_valid = True
             index = text.find('|')
-            expr = text[index+1:text[index+1:].find('|')+1]
+            expr = text[index+1:lesser(text[index+1:].find('|')+2, len(text)-1)]
             if debug_enabled:
                 print(expr)
             for char in expr:
@@ -239,8 +244,10 @@ def on_message(ws, message):
                             }
                             if debug_enabled:
                                 print(requests.get('https://slack.com/api/chat.postMessage', params=payload).json())
+                            else:
+                                requests.get('https://slack.com/api/chat.postMessage', params=payload)
                             # Upload the file
-                            upload = urllib.request.urlopen(file.get('url'))
+                            upload = urllib.request.urlopen(file.get('url_download'))
                             track = sc.post('/tracks', track={
                                 'title': file.get('name'),
                                 'asset_data': upload
